@@ -1,99 +1,95 @@
-let myFont;
-let points = [];
-let bounds;
+/**
+ * Ethereal Clouds Sketch
+ * Organic, randomly placed cloud-like objects using Perlin noise and soft gradients.
+ */
 
-function preload() {
-  // フォントを読み込む
-  myFont = loadFont('IBMPlexMono-Regular.ttf');
-}
+let clouds = [];
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+    createCanvas(windowWidth, windowHeight);
+    colorMode(HSB, 360, 100, 100, 1);
+    noStroke();
 
-  let txt = "A";
-  let fontSize = 500;
-
-  bounds = myFont.textBounds(txt, 0, 0, fontSize);
-
-  points = myFont.textToPoints(txt, 0, 0, fontSize, {
-    sampleFactor: 0.5,
-    simplifyThreshold: 0
-  });
-
-
-  // 画像書き出しボタンを作成
-  let imgBtn = createButton('画像で書き出し');
-  imgBtn.position(20, 20);
-  imgBtn.mousePressed(exportImage);
+    // Initialize a set of clouds
+    for (let i = 0; i < 15; i++) {
+        clouds.push(new Cloud());
+    }
 }
-// 画像書き出し関数
-function exportImage() {
-  saveCanvas('A_image', 'png');
+
+function draw() {
+    // Beautiful sky gradient
+    drawSky();
+
+    // Update and show clouds
+    for (let cloud of clouds) {
+        cloud.update();
+        cloud.display();
+    }
+}
+
+function drawSky() {
+    // Draw a radial or linear gradient background for the sky
+    for (let y = 0; y < height; y++) {
+        let inter = map(y, 0, height, 0, 1);
+        let c = lerpColor(color(210, 80, 20), color(220, 40, 60), inter);
+        stroke(c);
+        line(0, y, width, y);
+    }
+}
+
+class Cloud {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        this.x = random(-200, width + 200);
+        this.y = random(0, height * 0.7);
+        this.speed = random(0.2, 1.0);
+        this.size = random(100, 300);
+        this.numCircles = floor(random(15, 30));
+        this.offsets = [];
+        this.colors = [];
+
+        // Create random offsets for each circle in the cloud to make it "fluffy"
+        for (let i = 0; i < this.numCircles; i++) {
+            this.offsets.push({
+                x: random(-this.size * 0.6, this.size * 0.6),
+                y: random(-this.size * 0.3, this.size * 0.3),
+                w: random(this.size * 0.5, this.size),
+                h: random(this.size * 0.4, this.size * 0.8),
+                noiseOffset: random(1000)
+            });
+            // Varying whites and light purples
+            this.colors.push(color(random(200, 260), random(5, 15), 100, random(0.01, 0.05)));
+        }
+    }
+
+    update() {
+        this.x += this.speed;
+
+        // Wrap around logic
+        if (this.x - this.size > width) {
+            this.x = -this.size * 2;
+            this.y = random(0, height * 0.7);
+        }
+    }
+
+    display() {
+        noStroke();
+        for (let i = 0; i < this.numCircles; i++) {
+            let off = this.offsets[i];
+            fill(this.colors[i]);
+
+            // Add a bit of movement to individual puffs
+            let xNoise = noise(off.noiseOffset + frameCount * 0.005) * 20 - 10;
+            let yNoise = noise(off.noiseOffset + 100 + frameCount * 0.005) * 10 - 5;
+
+            ellipse(this.x + off.x + xNoise, this.y + off.y + yNoise, off.w, off.h);
+        }
+    }
 }
 
 function windowResized() {
-  // ウィンドウがリサイズされたら、キャンバスの大きさも再設定する
-  resizeCanvas(windowWidth, windowHeight);
+    resizeCanvas(windowWidth, windowHeight);
 }
-
-
-function draw() {
-  background(120);
-
-  fill(255);
-  noStroke();
-  let centerX = (width - bounds.w) / 2 - bounds.x;
-  let centerY = (height - bounds.h) / 2 - bounds.y;
-
-  push();
-  translate(centerX, centerY);
-
-  // for (let i = 0; i < points.length; i++) {
-  //   const pt = points[i];
-  //   //rect(pt.x, pt.y, 10, 10);
-  // }
-
-  beginShape();
-  for (let p of points) {
-    let nx = noise(p.x * 0.1, p.y * 0.1, frameCount * 0.01) * 100-100/2;
-    let ny = noise(p.y * 0.1, p.x * 0.1, frameCount * 0.01) * 100-100/2;
-
-    // 3. ノイズを加えた座標に線を引く
-    vertex(p.x + nx, p.y + ny);
-  }
-  endShape();
-  pop();
-  
-
-}
-
-
-// function draw() {
-//   background(120);
-
-//   textFont('helvetica');
-//   textSize(500);
-//   fill(255);
-//   textAlign(CENTER, CENTER);
-//   text('A', width / 2, height / 2);
-
-// }
-
-// // SVG書き出し関数
-// function exportSVG() {
-//   // SVGの内容を手動で生成
-//   const w = windowWidth;
-//   const h = windowHeight;
-//   const fontSize = 500;
-//   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">\n  <rect width="100%" height="100%" fill="rgb(120,120,120)"/>\n  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="helvetica" font-size="${fontSize}" fill="white">A</text>\n</svg>`;
-//   const blob = new Blob([svg], {type: 'image/svg+xml'});
-//   const url = URL.createObjectURL(blob);
-//   const a = document.createElement('a');
-//   a.href = url;
-//   a.download = 'A.svg';
-//   document.body.appendChild(a);
-//   a.click();
-//   document.body.removeChild(a);
-//   URL.revokeObjectURL(url);
-// }
-

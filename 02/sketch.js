@@ -1,84 +1,139 @@
-/*
- * CONTEXT: p5.js Creative Coding
- * GOAL: Create generative art using textToPoints
- * RULES:
- * 1. Use global variables declared at the top.
- * 2. Do NOT redeclare variables inside draw() (e.g., let points = ...).
- * 3. Keep the code simple and readable for students.
- * 4. Use vector math (p5.Vector) for physics.
- */
-
-let myFont;
-let points = [];
-let velocities = [];
-let bounds;
-
-function preload() {
-  // フォントを読み込む
-  myFont = loadFont('IBMPlexMono-Regular.ttf');
-}
+let bolts = [];
+let nextStrikeTime = 0;
+let flashOpacity = 0;
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
-
-  let txt = "A";
-  let fontSize = 1000;
-
-  bounds = myFont.textBounds(txt, 0, 0, fontSize);
-
-  points = myFont.textToPoints(txt, 0, 0, fontSize, {
-    sampleFactor: 0.1,
-    simplifyThreshold: 0
-  });
-
-  // 各点に速度ベクトルを与える（最初は0、ランダムな微小値を加える）
-  velocities = [];
-  for (let i = 0; i < points.length; i++) {
-    // y方向にランダムな初期速度（0.5〜2.5）
-    velocities.push(createVector(0, random(0.01, 1)));
-  }
-
-  // // 画像書き出しボタンを作成
-  // let imgBtn = createButton('画像で書き出し');
-  // imgBtn.position(20, 20);
-  // imgBtn.mousePressed(exportImage);
+    createCanvas(windowWidth, windowHeight);
+    background(5);
+    nextStrikeTime = millis() + 500;
 }
-// 画像書き出し関数
-function exportImage() {
-  saveCanvas('A_image', 'png');
+
+function draw() {
+    // Deep dark background with fade for "ghosting" effect
+    background(5, 5, 20, 60);
+
+    // Background flash effect when lightning hits
+    if (flashOpacity > 0) {
+        noStroke();
+        fill(180, 210, 255, flashOpacity);
+        rect(0, 0, width, height);
+        flashOpacity -= 5;
+    }
+
+    // Intermittent strike logic
+    if (millis() > nextStrikeTime) {
+        triggerStrike();
+        nextStrikeTime = millis() + random(1000, 4000); // Random interval for authenticity
+    }
+
+    // Update and show bolts
+    for (let i = bolts.length - 1; i >= 0; i--) {
+        bolts[i].update();
+        bolts[i].show();
+        if (bolts[i].isFinished()) {
+            bolts.splice(i, 1);
+        }
+    }
+}
+
+function triggerStrike() {
+    let startX = random(width * 0.1, width * 0.9);
+    // Main bolt
+    bolts.push(new LightningBolt(startX, 0, startX + random(-200, 200), height, 7));
+    flashOpacity = random(60, 110);
 }
 
 function windowResized() {
-  // ウィンドウがリサイズされたら、キャンバスの大きさも再設定する
-  resizeCanvas(windowWidth, windowHeight);
+    resizeCanvas(windowWidth, windowHeight);
 }
 
+class LightningBolt {
+    constructor(x1, y1, x2, y2, thickness, branch = false) {
+        this.segments = [];
+        this.life = 255;
+        this.fadeSpeed = random(8, 20);
+        this.maxThickness = thickness;
+        this.isBranch = branch;
+        this.generate(x1, y1, x2, y2);
+    }
 
-function draw() {
-  background(30, 30, 50);
+    generate(x, y, targetX, targetY) {
+        let currX = x;
+        let currY = y;
+        let count = 0;
 
-  // コメントを画面上部に表示
-  fill("#ffff00");
-  textAlign(LEFT, TOP);
-  textSize(12);
-  text('時間が経つにつれて、文字が溶けて下に流れていくようなアニメーションにして。', 5, 5);
+        // Create segments until it reaches the target height
+        while (currY < targetY && count < 100) {
+            let nextX = currX + random(-40, 40);
+            let nextY = currY + random(15, 50);
 
-  fill(255, 220, 200, 200);
-  noStroke();
-  let centerX = (width - bounds.w) / 2 - bounds.x;
-  let centerY = (height - bounds.h) / 2 - bounds.y;
+            // Pull slightly towards targetX
+            nextX += (targetX - currX) * 0.1;
 
-  push();
-  translate(centerX, centerY);
-  for (let i = 0; i < points.length; i++) {
-    // 点の位置を更新
-    points[i].y += velocities[i].y;
-    // 徐々に速度を増やして溶ける感じを出す
-    velocities[i].y += random(0, 0.1);
-    // 少し横にも揺らぎを加える
-    points[i].x += noise(i, frameCount * 0.02) * 5.0 - 5.0 / 2;
+            this.segments.push({
+                x1: currX,
+                y1: currY,
+                x2: nextX,
+                y2: nextY
+            });
 
-    ellipse(points[i].x, points[i].y, 20, 20);
-  }
-  pop();
+            // Branching logic: branches are smaller and shorter
+            if (!this.isBranch && random() < 0.08 && count > 5) {
+                let bTargetX = nextX + random(-300, 300);
+                let bTargetY = nextY + random(100, 400);
+                bolts.push(new LightningBolt(nextX, nextY, bTargetX, min(bTargetY, height), this.maxThickness * 0.5, true));
+            }
+
+            currX = nextX;
+            currY = nextY;
+            count++;
+        }
+    }
+
+    update() {
+        this.life -= this.fadeSpeed;
+    }
+
+    show() {
+        if (this.life <= 0) return;
+
+        push();
+
+        // Aesthetic Outer Glow
+        drawingContext.shadowBlur = 40;
+        // Use string template for rgba to ensure p5.js color handling works with shadowColor
+        drawingContext.shadowColor = `rgba(180, 210, 255, ${this.life / 255})`;
+        stroke(150, 180, 255, this.life);
+        strokeWeight(this.maxThickness);
+        noFill();
+        this.drawSegments();
+
+        // Secondary Core Glow
+        drawingContext.shadowBlur = 15;
+        drawingContext.shadowColor = `rgba(255, 255, 255, ${this.life / 255})`;
+        stroke(220, 240, 255, this.life);
+        strokeWeight(this.maxThickness * 0.5);
+        this.drawSegments();
+
+        // Bright Core
+        drawingContext.shadowBlur = 0;
+        stroke(255, 255, 255, this.life);
+        strokeWeight(this.maxThickness * 0.15);
+        this.drawSegments();
+
+        pop();
+    }
+
+    drawSegments() {
+        beginShape(LINES);
+        for (let seg of this.segments) {
+            vertex(seg.x1, seg.y1);
+            vertex(seg.x2, seg.y2);
+        }
+        endShape();
+    }
+
+    isFinished() {
+        return this.life <= 0;
+    }
 }

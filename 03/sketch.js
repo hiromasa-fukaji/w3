@@ -1,79 +1,99 @@
-/*
- * CONTEXT: p5.js Creative Coding
- * GOAL: Create generative art using textToPoints
- * RULES:
- * 1. Use global variables declared at the top.
- * 2. Do NOT redeclare variables inside draw() (e.g., let points = ...).
- * 3. Keep the code simple and readable for students.
- * 4. Use vector math (p5.Vector) for physics.
- */
-
-let myFont;
-let points = [];
-let bounds;
-
-function preload() {
-  // フォントを読み込む
-  myFont = loadFont('IBMPlexMono-Regular.ttf');
-}
+let drops = [];
+let splashes = [];
+let numDrops = 1000;
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
-
-  let txt = "A";
-  let fontSize = 1000;
-
-  bounds = myFont.textBounds(txt, 0, 0, fontSize);
-
-  points = myFont.textToPoints(txt, 0, 0, fontSize, {
-    sampleFactor: 0.05,
-    simplifyThreshold: 0
-  });
-
-
-  // // 画像書き出しボタンを作成
-  // let imgBtn = createButton('画像で書き出し');
-  // imgBtn.position(20, 20);
-  // imgBtn.mousePressed(exportImage);
+    createCanvas(windowWidth, windowHeight);
+    for (let i = 0; i < numDrops; i++) {
+        drops.push(new Drop());
+    }
 }
-// 画像書き出し関数
-function exportImage() {
-  saveCanvas('A_image', 'png');
+
+function draw() {
+    // 非常に暗い、少し青みがかった背景
+    background(5, 10, 20, 180);
+
+    // 雨粒の描画
+    for (let drop of drops) {
+        drop.fall();
+        drop.show();
+    }
+
+    // 地面の水しぶきの描画
+    for (let i = splashes.length - 1; i >= 0; i--) {
+        splashes[i].update();
+        splashes[i].show();
+        if (splashes[i].isDead()) {
+            splashes.splice(i, 1);
+        }
+    }
 }
 
 function windowResized() {
-  // ウィンドウがリサイズされたら、キャンバスの大きさも再設定する
-  resizeCanvas(windowWidth, windowHeight);
+    resizeCanvas(windowWidth, windowHeight);
 }
 
+class Drop {
+    constructor() {
+        this.init();
+        this.y = random(height); // 初回は画面内に散らす
+    }
 
-function draw() {
-  background(120);
+    init() {
+        this.x = random(-200, width);
+        this.y = random(-1000, -100);
+        this.z = random(0, 20);
+        this.len = map(this.z, 0, 20, 10, 40);
+        this.yspeed = map(this.z, 0, 20, 10, 30);
+        this.thickness = map(this.z, 0, 20, 0.5, 3);
+        this.opacity = map(this.z, 0, 20, 40, 200);
+    }
 
-  // コメントを画面上部に表示
-  fill("#ffff00");
-  textAlign(LEFT, TOP);
-  textSize(12);
-  text('文字が風に吹かれているように、波打つような動きをつけて。', 5, 5);
+    fall() {
+        this.y += this.yspeed;
+        this.x += 1; // わずかな風
 
-  fill(255);
-  noStroke();
-  let centerX = (width - bounds.w) / 2 - bounds.x;
-  let centerY = (height - bounds.h) / 2 - bounds.y;
+        if (this.y > height) {
+            // 地面に当たったら水しぶきを追加（手前の雨粒のみ）
+            if (this.z > 15 && random() > 0.7) {
+                splashes.push(new Splash(this.x, height));
+            }
+            this.init();
+        }
+    }
 
-  // 波のパラメータ
-  let amplitude = 30; // 波の高さ
-  let wavelength = 20; // 波の長さ
-  let speed = 0.05; // 波の進む速さ
+    show() {
+        stroke(180, 200, 255, this.opacity);
+        strokeWeight(this.thickness);
+        line(this.x, this.y, this.x + 1, this.y + this.len);
+    }
+}
 
-  push();
-  translate(centerX, centerY);
-  for (let i = 0; i < points.length; i++) {
-    let pt = points[i];
-    // サイン波でY座標を揺らす
-    let wave = sin((pt.x / wavelength) + (frameCount * speed));
-    let yOffset = wave * amplitude;
-    ellipse(pt.x, pt.y + yOffset, 10, 10);
-  }
-  pop();
+class Splash {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.alpha = 200;
+        this.size = random(2, 6);
+        this.vx = random(-2, 2);
+        this.vy = random(-2, -5);
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.3; // 重力
+        this.alpha -= 10;
+    }
+
+    show() {
+        stroke(200, 220, 255, this.alpha);
+        strokeWeight(1);
+        noFill();
+        ellipse(this.x, this.y, this.size, this.size * 0.5);
+    }
+
+    isDead() {
+        return this.alpha <= 0;
+    }
 }
